@@ -45,6 +45,8 @@
 #include "vlan.h"
 #include "vport.h"
 
+
+
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			      struct sw_flow_key *key,
 			      const struct nlattr *attr, int len);
@@ -334,6 +336,7 @@ static int push_gtpv1(struct sk_buff *skb, struct sw_flow_key *key, const struct
 	outer_udphdr->dest = htons(GTPv1_PORT);
 	outer_udphdr->len = htons(UDP_HLEN + GTPU_HLEN_PLAIN + ntohs(inner_ip_totlen));
 	outer_udphdr->check = 0;
+	
 
 	/* fill the GTPv1 header */
 	gtphdr->version = 1;					// GTPv1
@@ -344,7 +347,14 @@ static int push_gtpv1(struct sk_buff *skb, struct sw_flow_key *key, const struct
 	gtphdr->pnf = 0;
 	gtphdr->type = GTP_MSG_TYPE_GPDU;		// G-PDU msg type
 	gtphdr->tot_len = inner_ip_totlen;		// IPv4's 'tot_len' header field is already in network byte order
-	gtphdr->teid = htonl(gtpv1->teid);		// Tunnel ID
+	htonl(gtpv1->teid);		                // Tunnel ID
+
+	outer_udphdr->check = csum_tcpudp_magic(outer_iphdr->saddr,outer_iphdr->daddr,ntohs(outer_udphdr->len),
+		                IPPROTO_UDP,csum_partial((unsigned char *)outer_udphdr,ntohs(outer_udphdr->len),0));
+	if(outer_udphdr->check == 0)
+    {
+    	outer_udphdr->check = 0xffff;	
+	}
 
 	ip_send_check(ip_hdr(skb));				// compute the tunnel's ip checksum
 
@@ -975,7 +985,9 @@ static int fill_ethdr(struct sk_buff *skb, const struct vport *vport)
 
 	ethdr = eth_hdr(skb);
 	ethdr->h_proto = htons(ETH_P_IP);		// follows IPv4
+	
 	memcpy(ethdr->h_source, vport->dev->dev_addr, ETH_ALEN);
+	
 
 	if (nbr->nud_state & NUD_VALID)
 	{
@@ -1015,12 +1027,13 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port, st
 
 		if (likely(!mru || (skb->len <= mru + ETH_HLEN)))
 		{
+		    
 			if (/*IF_GTP_FLOW(*key)*/ethdr->h_proto == 0 && ETH_ADDR_IS_ZERO(ethdr->h_source) && ETH_ADDR_IS_ZERO(ethdr->h_dest))
 			{
 				if (fill_ethdr(skb, vport) != 0)
-					return kfree_skb(skb);
+				return kfree_skb(skb);
 			}
-
+		   
 			ovs_vport_send(vport, skb);
 		}
 		else if (!IF_GTP_FLOW(*key))
