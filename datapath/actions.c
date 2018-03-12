@@ -347,7 +347,7 @@ static int push_gtpv1(struct sk_buff *skb, struct sw_flow_key *key, const struct
 	gtphdr->pnf = 0;
 	gtphdr->type = GTP_MSG_TYPE_GPDU;		// G-PDU msg type
 	gtphdr->tot_len = inner_ip_totlen;		// IPv4's 'tot_len' header field is already in network byte order
-	htonl(gtpv1->teid);		                // Tunnel ID
+	gtphdr->teid = htonl(gtpv1->teid);		                // Tunnel ID
 
 	outer_udphdr->check = csum_tcpudp_magic(outer_iphdr->saddr,outer_iphdr->daddr,ntohs(outer_udphdr->len),
 		                IPPROTO_UDP,csum_partial((unsigned char *)outer_udphdr,ntohs(outer_udphdr->len),0));
